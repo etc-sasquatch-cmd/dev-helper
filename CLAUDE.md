@@ -27,7 +27,7 @@ Call the venv's Python directly. These work from PowerShell or CMD, from the rep
 ## Layout
 - `src/focusdeck/core/`: timer, quarters, time attribution, allocation. Pure logic, no UI or network.
 - `src/focusdeck/db/`: SQLite access and numbered migrations
-- `src/focusdeck/music/`: `MusicProvider` protocol, YouTube and Spotify implementations
+- `src/focusdeck/music/`: `MusicProvider` protocol, link parsing, phase-to-music controller, YouTube player
 - `src/focusdeck/roadmaps/`: local roadmap format, importer, progress
 - `src/focusdeck/capture/`: hook script, spool ingest, defensive transcript parser
 - `src/focusdeck/agents/`: runner, prompts, Pydantic output schemas
@@ -51,7 +51,10 @@ Call the venv's Python directly. These work from PowerShell or CMD, from the rep
   clone or written by hand, and is never committed or published. See SPEC section 5.
 - Do not hide, cover, or shrink the YouTube player below 200x200 while it plays.
   Do not extract audio or use anything other than the official IFrame player.
-- Spotify is optional. If it is not configured or the account lacks Premium, the app still works.
+- Spotify is dropped (decided 2026-11-10). Music is YouTube only. Do not build SPEC M3 or the
+  Spotify parts of SPEC section 4, and do not add `keyring`, unless I ask for Spotify again.
+- Nothing may cover the YouTube player while it plays. Prompts are inline panels, pop-up messages
+  go to the top of the window, and opening a dialog pauses the music until it closes.
 - NiceGUI native mode starts a separate process. Use the `__mp_main__` guard and `reload=False`.
 
 ## Secrets and privacy
@@ -95,3 +98,20 @@ End each milestone with this report so I can review it elsewhere:
 3. Commands I should run to check it myself
 4. Deviations from SPEC and why
 5. Known risks or anything unverified
+
+## Status (updated 2026-11-10)
+Read the newest `brief_*.md` in the repo root for the details behind this list.
+
+Changes so far:
+- M0 risk spikes: done, all five passed.
+- M1 timer and storage: done, manual check passed.
+- M2 YouTube music: done and pushed (`90530e1`). Saved sources, one per-phase profile,
+  music follows the timer, inline recap panel, player always visible at 200 px tall.
+- M3 Spotify: built, then removed before any commit. I wanted Spotify to play inside the widget;
+  the built version only remote-controlled a separate Spotify app, so I dropped it.
+
+NEXT:
+1. M4 skills and roadmaps (SPEC section 5 and the M4 checklist). Plan first and wait for approval.
+2. Before planning M4, ask me for the path to my local clone of the roadmap repository and
+   inspect its real file format. Do not assume its structure.
+3. Still untested from M2: a real YouTube playlist link (`list=PL...`). Ask me to try one.
