@@ -12,9 +12,11 @@ KEY_SIZE_COMPACT = "ui.window.size.compact"
 KEY_ON_TOP = "ui.window.on_top"
 KEY_COMPACT = "ui.window.compact"
 
-DEFAULT_SIZE_NORMAL = (340, 560)
-DEFAULT_SIZE_COMPACT = (300, 250)
-MIN_SIZE = (220, 160)
+# Sizes leave room for the YouTube player, which must stay at least 200x200 and in view.
+DEFAULT_SIZE_NORMAL = (340, 800)
+DEFAULT_SIZE_COMPACT = (320, 590)
+MIN_SIZE = (300, 450)
+RECAP_PANEL_HEIGHT = 160  # compact mode grows by this much while the recap prompt shows
 
 
 @dataclass(frozen=True)

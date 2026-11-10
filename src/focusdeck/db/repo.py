@@ -1,10 +1,12 @@
-"""All SQL for the timer lives here. Timestamps go in and out as UTC datetimes."""
+"""All SQL lives here. Timestamps go in and out as UTC datetimes."""
 
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+from focusdeck.music.provider import MusicSource
 
 
 def to_db(moment: datetime) -> str:
@@ -48,6 +50,29 @@ class BlockRow:
     elapsed_seconds: float | None
     recap: str | None
     recap_skipped: bool
+
+
+@dataclass(frozen=True)
+class ProfileRow:
+    """Which source plays in each phase. None means silence."""
+
+    focus_source_id: int | None
+    short_break_source_id: int | None
+    long_break_source_id: int | None
+
+    def source_id_for(self, phase: str) -> int | None:
+        return getattr(self, PROFILE_COLUMNS[phase])
+
+
+# Phase name to column name. Also the whitelist for the column in set_profile_source().
+PROFILE_COLUMNS = {
+    "focus": "focus_source_id",
+    "short_break": "short_break_source_id",
+    "long_break": "long_break_source_id",
+}
+MUSIC_PROVIDERS = ("youtube",)
+MUSIC_KINDS = ("video", "playlist")
+DEFAULT_PROFILE_ID = 1
 
 
 def _block(row: sqlite3.Row) -> BlockRow:
@@ -235,3 +260,48 @@ class Repo:
             "AND ended_at >= ? AND ended_at < ?",
             (to_db(since), to_db(until)),
         ).fetchone()[0]
+
+    # music --------------------------------------------------------------------
+
+    def list_music_sources(self) -> list[MusicSource]:
+        rows = self.conn.execute(
+            "SELECT id, name, provider, kind, external_id FROM music_source ORDER BY name"
+        ).fetchall()
+        return [MusicSource(**dict(row)) for row in rows]
+
+    def create_music_source(self, name: str, provider: str, kind: str, external_id: str) -> int:
+        """Raises ValueError for an empty or duplicate name, or a link that is already saved."""
+        name = " ".join(name.split())
+        if not name:
+            raise ValueError("give the source a name")
+        if provider not in MUSIC_PROVIDERS or kind not in MUSIC_KINDS or not external_id:
+            raise ValueError("unknown kind of music source")
+        try:
+            cursor = self.conn.execute(
+                "INSERT INTO music_source (name, provider, kind, external_id) VALUES (?, ?, ?, ?)",
+                (name, provider, kind, external_id),
+            )
+        except sqlite3.IntegrityError as error:
+            if "music_source.name" in str(error):
+                raise ValueError("another source already has that name") from error
+            raise ValueError("that link is already saved") from error
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def delete_music_source(self, source_id: int) -> None:
+        """Phases that used the source become silent (ON DELETE SET NULL)."""
+        self.conn.execute("DELETE FROM music_source WHERE id = ?", (source_id,))
+
+    def get_profile(self) -> ProfileRow:
+        row = self.conn.execute(
+            "SELECT focus_source_id, short_break_source_id, long_break_source_id "
+            "FROM music_profile WHERE id = ?",
+            (DEFAULT_PROFILE_ID,),
+        ).fetchone()
+        return ProfileRow(**dict(row)) if row else ProfileRow(None, None, None)
+
+    def set_profile_source(self, phase: str, source_id: int | None) -> None:
+        column = PROFILE_COLUMNS[phase]  # KeyError for anything that is not a phase name
+        self.conn.execute(
+            f"UPDATE music_profile SET {column} = ? WHERE id = ?", (source_id, DEFAULT_PROFILE_ID)
+        )
