@@ -14,7 +14,14 @@ from focusdeck.agents.actions import (
     pending_quarter,
     set_quarter_reminders,
 )
-from focusdeck.agents.contracts import SCHEMAS, Classification, Critique, Quiz, StudyReview
+from focusdeck.agents.contracts import (
+    ARTIFACT_REVIEW,
+    SCHEMAS,
+    Classification,
+    Critique,
+    Quiz,
+    StudyReview,
+)
 from focusdeck.agents.digest import Request, prepare, quiz_topics
 from focusdeck.agents.runner import AgentRunner, ReviewError, ReviewRun
 from focusdeck.core.calendar import BUCKETS
@@ -39,7 +46,11 @@ def reviewer_dialog(
         ui.label("AI reviewers").classes("font-medium")
         with ui.column().classes("w-full gap-2") as setup:
             selected_date = ui.label().classes("text-xs")
-            task = ui.select(list(SCHEMAS), value="Work Critic", label="Review").classes("w-full")
+            task = ui.select(
+                [name for name in SCHEMAS if name != ARTIFACT_REVIEW],
+                value="Work Critic",
+                label="Review",
+            ).classes("w-full")
             period = ui.select(["Day", *BUCKETS], value="Day", label="Period").classes("w-full")
             node = ui.select({}, label="Public quiz topic", with_input=True).classes("w-full")
             topic_note = ui.label(

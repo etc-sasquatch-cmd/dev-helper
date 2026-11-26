@@ -24,6 +24,7 @@ from focusdeck.music.links import parse_youtube_link
 from focusdeck.music.provider import MusicSource
 from focusdeck.music.youtube import PLAYER_ELEMENT_ID, PLAYER_JS, YouTubeProvider, describe_error
 from focusdeck.ui import alerts, window
+from focusdeck.ui.artifact import artifact_dialog
 from focusdeck.ui.capture import capture_dialog, settings_path
 from focusdeck.ui.day import day_dialog
 from focusdeck.ui.review import reviewer_dialog
@@ -575,8 +576,10 @@ def build_page(
 
     for dialog in (skill_dialog, preset_dialog, music_dialog):
         dialog.on_value_change(on_dialog_toggled)
+    reviewer = reviewer or AgentRunner(cache_dir)
+    show_artifact = artifact_dialog(repo, service.clock, reviewer, on_dialog_toggled, toast)
     study_button.on_click(
-        study_dialog(study, service, refresh_topic_options, on_dialog_toggled, toast)
+        study_dialog(study, service, refresh_topic_options, on_dialog_toggled, toast, show_artifact)
     )
     capture_button.on_click(
         capture_dialog(
@@ -588,7 +591,7 @@ def build_page(
         day_store,
         service.clock,
         cache_dir,
-        reviewer or AgentRunner(cache_dir),
+        reviewer,
         on_dialog_toggled,
         toast,
     )

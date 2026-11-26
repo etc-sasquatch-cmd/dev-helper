@@ -144,8 +144,23 @@ synthetic input and scratch files inside `dev-helper`.
   and the reviewer capture exclusion. The five live smoke tests above verify the CLI
   transport with Claude.
 
-M7 verification is complete. M7 is the final numbered SPEC milestone. Judge-reviewed
-artifact verification remains outstanding.
+M7 verification is complete. M7 is the final numbered SPEC milestone. The follow-up
+artifact workflow is available under **Study → Roadmaps → Review artifact**.
+
+### Live artifact review smoke test (2026-11-26)
+
+- Claude Haiku 5.5 returned `demonstrates_topic` on the first attempt (4.95 s).
+  It quoted two exact lines from a synthetic Python function and explained how
+  the function removes consecutive duplicates while preserving order.
+- The exact request was previewed before sending. Its input contained only the
+  criterion and synthetic sample. The local artifact reference stayed in the
+  scratch database inside `dev-helper`.
+- Confirming the verdict recorded one E2 evidence row and one provenance record,
+  marked the topic Verified, and added one Day report entry. Confirming the same
+  review again added no duplicate.
+- Verdicts are bound to the reviewed criterion, sample, and selected node.
+  The swapped-result regression, synthetic UI check, all 158 tests, and Ruff
+  lint and formatting checks passed.
 
 ### Historical follow-ups from 2026-11-10
 

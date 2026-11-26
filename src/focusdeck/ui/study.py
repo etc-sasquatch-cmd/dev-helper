@@ -22,7 +22,12 @@ STATE_LABELS = {
 
 
 def study_dialog(
-    study: StudyRepo, service: TimerService, on_links_changed, on_dialog_toggled, toast
+    study: StudyRepo,
+    service: TimerService,
+    on_links_changed,
+    on_dialog_toggled,
+    toast,
+    show_artifact,
 ):
     with ui.dialog() as dialog, ui.card().classes("w-80 max-h-[85vh] overflow-auto gap-2"):
         with ui.tabs().classes("w-full").props("dense no-caps align=justify") as tabs:
@@ -137,8 +142,7 @@ def study_dialog(
                         ui.label(f"{row['roadmap']} · {STATE_LABELS[row['state']]}")
                         ui.link("Open source", row["url"], new_tab=True)
 
-                        def set_skipped() -> None:
-                            study.set_skipped(row["id"], row["state"] != "skipped")
+                        def refresh_topic() -> None:
                             nodes.update({item["id"]: item for item in study.nodes()})
                             topic.set_options(
                                 {
@@ -150,8 +154,17 @@ def study_dialog(
                             topic_details.refresh()
                             on_links_changed()
 
+                        def set_skipped() -> None:
+                            study.set_skipped(row["id"], row["state"] != "skipped")
+                            refresh_topic()
+
                         label = "Restore topic" if row["state"] == "skipped" else "Skip topic"
                         ui.button(label, on_click=set_skipped).props("dense flat")
+                        if row["state"] != "skipped":
+                            ui.button(
+                                "Review artifact",
+                                on_click=lambda: show_artifact(row, refresh_topic),
+                            ).props("dense flat")
 
                     topic.on_value_change(lambda _: topic_details.refresh())
                     topic_details()

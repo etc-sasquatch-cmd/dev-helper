@@ -16,6 +16,7 @@ from tempfile import TemporaryDirectory
 from pydantic import ValidationError
 
 from focusdeck.agents.contracts import (
+    ARTIFACT_REVIEW,
     PROMPTS,
     TONE,
     Output,
@@ -48,6 +49,12 @@ class ReviewRun:
     input_tokens: int | None
     output_tokens: int | None
     cached: bool
+
+
+def review_request(task: str, digest: dict) -> tuple[str, str, dict]:
+    instructions = PROMPTS[task] if task == ARTIFACT_REVIEW else f"{TONE}\n{PROMPTS[task]}"
+    payload = json.dumps(digest, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return instructions, payload, claude_schema(task, digest)
 
 
 def _count(value: object) -> int | None:
@@ -167,9 +174,7 @@ class AgentRunner:
         self.transport = transport if transport is not None else ClaudeTransport(folder, model)
 
     def run(self, task: str, digest: dict) -> ReviewRun:
-        schema = claude_schema(task, digest)
-        instructions = f"{TONE}\n{PROMPTS[task]}"
-        payload = json.dumps(digest, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        instructions, payload, schema = review_request(task, digest)
         if len(payload) > 48_000:
             raise ReviewError("The reviewer request is too large.")
         material = json.dumps([self.namespace, self.model, task, instructions, schema, payload])

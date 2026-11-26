@@ -8,8 +8,8 @@ save whole percentages totaling 100%. In **Roadmaps**, import a roadmap and use
 **Skill to link** to assign its topics or project paths to a skill. Back in the
 timer, select the skill and an optional topic before starting focus. Positive
 logged time marks a topic Learning. Saving a recap on a completed focus block
-marks it Claimed. A perfect score on a recall quiz marks the topic Verified.
-Judge-reviewed artifact verification is still outstanding.
+marks it Claimed. A perfect recall quiz or a confirmed passing artifact review marks
+the topic Verified.
 
 Run FocusDeck from the repository root to import from `data/roadmaps/`. For a
 local roadmap.sh checkout, enter the relative path to its roadmap folder, such
@@ -87,3 +87,16 @@ project instructions stay local. The optional checkout field supplies counts and
 rule indicators only. Recall quizzes are limited to supported public subjects.
 FocusDeck grades answers locally and records E2 evidence for a 3/3 result.
 Applied classification suggestions preserve any manual correction.
+
+### Artifact verification
+
+In **Study → Roadmaps**, select an active topic and choose **Review artifact**.
+Enter a local artifact reference, a shareable criterion describing what the topic
+requires, and a short sample cleared for sharing. FocusDeck sends only the criterion
+and sample as input after you preview and approve the request. It keeps the artifact
+reference local and does not read or upload the file.
+
+Study Judge shows its verdict and any quoted evidence. If the sample demonstrates
+the topic, choose **Confirm and record E2** to save the verdict and mark the topic
+Verified. The evidence appears in the Day report. Confirming the same criterion
+and sample again for the same topic does not add another evidence row.
