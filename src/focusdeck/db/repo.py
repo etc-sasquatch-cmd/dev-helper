@@ -228,19 +228,36 @@ class Repo:
             is not None
         )
 
-    def mark_paused(self, block_id: int, remaining_seconds: float) -> None:
-        self.conn.execute(
-            "UPDATE pomodoro_block SET status = 'paused', ends_at = NULL, remaining_seconds = ? "
-            "WHERE id = ?",
-            (remaining_seconds, block_id),
-        )
+    def mark_paused(self, block_id: int, remaining_seconds: float, paused_at: datetime) -> None:
+        with self.transaction():
+            self.conn.execute(
+                """
+                UPDATE pomodoro_run SET ended_at = max(started_at, min(?, (
+                    SELECT ends_at FROM pomodoro_block WHERE id = ?
+                ))) WHERE block_id = ? AND ended_at IS NULL
+                """,
+                (to_db(paused_at), block_id, block_id),
+            )
+            self.conn.execute(
+                "UPDATE pomodoro_block SET status = 'paused', ends_at = NULL, "
+                "remaining_seconds = ? WHERE id = ?",
+                (remaining_seconds, block_id),
+            )
 
-    def mark_running(self, block_id: int, ends_at: datetime) -> None:
-        self.conn.execute(
-            "UPDATE pomodoro_block SET status = 'running', ends_at = ?, remaining_seconds = NULL "
-            "WHERE id = ?",
-            (to_db(ends_at), block_id),
-        )
+    def mark_running(self, block_id: int, ends_at: datetime, resumed_at: datetime) -> None:
+        with self.transaction():
+            self.conn.execute(
+                "UPDATE pomodoro_block SET status = 'running', ends_at = ?, "
+                "remaining_seconds = NULL WHERE id = ?",
+                (to_db(ends_at), block_id),
+            )
+            self.conn.execute(
+                """
+                INSERT INTO pomodoro_run (block_id, started_at)
+                SELECT id, ? FROM pomodoro_block WHERE id = ? AND phase = 'focus'
+                """,
+                (to_db(resumed_at), block_id),
+            )
 
     def finish_block(
         self, block_id: int, *, status: str, ended_at: datetime, elapsed_seconds: float

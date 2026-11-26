@@ -163,15 +163,17 @@ class TimerService:
         self._start(skill_id, work_type, self.clock.now(), node_id)
 
     def pause(self) -> None:
-        new_state = timer.pause(self.state, self.clock.now())
+        now = self.clock.now()
+        new_state = timer.pause(self.state, now)
         assert self.block_id is not None and new_state.paused_remaining is not None
-        self.repo.mark_paused(self.block_id, new_state.paused_remaining)
+        self.repo.mark_paused(self.block_id, new_state.paused_remaining, now)
         self.state = new_state
 
     def resume(self) -> None:
-        new_state = timer.resume(self.state, self.clock.now())
+        now = self.clock.now()
+        new_state = timer.resume(self.state, now)
         assert self.block_id is not None and new_state.ends_at is not None
-        self.repo.mark_running(self.block_id, new_state.ends_at)
+        self.repo.mark_running(self.block_id, new_state.ends_at, now)
         self.state = new_state
 
     def _abandon(self, status: str, new_state: TimerState) -> None:

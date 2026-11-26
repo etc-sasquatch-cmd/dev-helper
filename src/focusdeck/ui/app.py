@@ -14,6 +14,7 @@ from focusdeck.core.clock import SystemClock
 from focusdeck.core.service import AUTO_START_GRACE_SECONDS, PhaseEnded, TimerService
 from focusdeck.core.timer import WORK_TYPES, Phase, Status, TimerError
 from focusdeck.db.connection import data_dir, open_database
+from focusdeck.db.day import DayRepo
 from focusdeck.db.repo import Repo
 from focusdeck.db.study import StudyRepo
 from focusdeck.music.controller import MusicController
@@ -22,6 +23,7 @@ from focusdeck.music.provider import MusicSource
 from focusdeck.music.youtube import PLAYER_ELEMENT_ID, PLAYER_JS, YouTubeProvider, describe_error
 from focusdeck.ui import alerts, window
 from focusdeck.ui.capture import capture_dialog, settings_path
+from focusdeck.ui.day import day_dialog
 from focusdeck.ui.study import study_dialog
 
 log = logging.getLogger("focusdeck.ui")
@@ -214,8 +216,10 @@ def build_page(
             capture_button = ui.button("Capture").props("dense flat")
 
     with footer:
-        stats_label = ui.label().classes("text-xs text-gray-500")
-        compact_button = ui.button(icon="unfold_less").props("flat dense").tooltip("Compact")
+        stats_label = ui.label().classes("grow min-w-0 text-xs text-gray-500")
+        with ui.row().classes("shrink-0 gap-1 no-wrap"):
+            day_button = ui.button("Day").props("flat dense")
+            compact_button = ui.button(icon="unfold_less").props("flat dense").tooltip("Compact")
 
     skill_select.on_value_change(lambda _: refresh_topic_options(keep_selection=False))
     refresh_topic_options()
@@ -575,6 +579,9 @@ def build_page(
             repo, cache_dir, capture_settings or settings_path(), on_dialog_toggled, toast
         )
     )
+    day_store = DayRepo(repo)
+    day_button.on_click(day_dialog(day_store, service.clock, cache_dir, on_dialog_toggled, toast))
+
     # Controls -------------------------------------------------------------------------
 
     def guarded(action) -> None:
@@ -661,8 +668,8 @@ def build_page(
             Status.PAUSED: "Resume",
         }[state.status]
         stats_label.text = (
-            f"Today: {service.completed_focus_today()} done"
-            f" · recaps skipped: {service.skipped_recap_count()}"
+            f"Today: {service.completed_focus_today()}"
+            f" · Recaps skipped: {service.skipped_recap_count()}"
         )
 
     def on_tick() -> None:
