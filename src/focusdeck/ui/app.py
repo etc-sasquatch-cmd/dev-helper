@@ -9,6 +9,8 @@ from pathlib import Path
 from nicegui import app, ui
 from nicegui import run as nicegui_run
 
+from focusdeck.agents.actions import pending_quarter
+from focusdeck.agents.runner import AgentRunner
 from focusdeck.capture.ingest import ingest
 from focusdeck.core.clock import SystemClock
 from focusdeck.core.service import AUTO_START_GRACE_SECONDS, PhaseEnded, TimerService
@@ -24,6 +26,7 @@ from focusdeck.music.youtube import PLAYER_ELEMENT_ID, PLAYER_JS, YouTubeProvide
 from focusdeck.ui import alerts, window
 from focusdeck.ui.capture import capture_dialog, settings_path
 from focusdeck.ui.day import day_dialog
+from focusdeck.ui.review import reviewer_dialog
 from focusdeck.ui.study import study_dialog
 
 log = logging.getLogger("focusdeck.ui")
@@ -65,6 +68,7 @@ def build_page(
     repo: Repo,
     cache_dir: Path,
     capture_settings: Path | None = None,
+    reviewer: AgentRunner | None = None,
 ) -> None:
     compact = {"on": repo.get_setting(window.KEY_COMPACT, "0") == "1"}
     client = ui.context.client
@@ -580,7 +584,21 @@ def build_page(
         )
     )
     day_store = DayRepo(repo)
-    day_button.on_click(day_dialog(day_store, service.clock, cache_dir, on_dialog_toggled, toast))
+    show_review = reviewer_dialog(
+        day_store,
+        service.clock,
+        cache_dir,
+        reviewer or AgentRunner(cache_dir),
+        on_dialog_toggled,
+        toast,
+    )
+    day_button.on_click(
+        day_dialog(day_store, service.clock, cache_dir, on_dialog_toggled, toast, show_review)
+    )
+
+    def check_quarter_review() -> None:
+        upcoming = pending_quarter(day_store, service.clock.now())
+        day_button.text = f"Day · {upcoming[-2:]}" if upcoming else "Day"
 
     # Controls -------------------------------------------------------------------------
 
@@ -698,9 +716,10 @@ def build_page(
     update_music_label()
     ui.timer(0.5, on_tick)
     ui.timer(3.0, save_geometry, immediate=False)
+    ui.timer(15.0, check_quarter_review)
 
 
-def run() -> None:
+def run(reviewer: AgentRunner | None = None) -> None:
     # Native mode starts a second process for the window, which imports this module again.
     # Only the main process may open the database and start the server.
     if multiprocessing.current_process().name != "MainProcess":
@@ -735,7 +754,7 @@ def run() -> None:
 
     @ui.page("/")
     def index() -> None:
-        build_page(service, repo, folder, capture_settings)
+        build_page(service, repo, folder, capture_settings, reviewer)
 
     ui.run(
         native=True,

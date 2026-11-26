@@ -22,7 +22,7 @@ DIAGRAM_OPTIONS = {
 }
 
 
-def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast):
+def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, show_review):
     today = clock.now().astimezone().date()
     report: DayReport | None = None
     chart_request = 0
@@ -30,6 +30,7 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast):
     with ui.dialog() as dialog, ui.card().classes("w-[520px] max-h-[85vh] overflow-y-auto gap-2"):
         with ui.row().classes("w-full items-center justify-between no-wrap"):
             ui.label("Day report").classes("font-medium")
+            review_button = ui.button("Review").props("dense flat")
         selected = (
             ui.input("Date", value=today.isoformat()).classes("w-full").props("type=date dense")
         )
@@ -131,6 +132,7 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast):
         totals.refresh()
         export_status.text = ""
         export_button.set_enabled(report is not None)
+        review_button.set_enabled(report is not None)
         skills = {item.id: item.name for item in store.repo.list_skills()}
         skill.set_options(skills)
         options = {item: item for item in report.sessions} if report else {}
@@ -220,6 +222,7 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast):
     clear_correction_button.on_click(lambda: save_correction(clear=True))
     save_hours_button.on_click(save_hours)
     export_button.on_click(save_export)
+    review_button.on_click(lambda: report and show_review(report.day, update_report))
     dialog.on_value_change(on_dialog_toggled)
 
     async def open_dialog() -> None:

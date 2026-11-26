@@ -52,13 +52,15 @@ class DayRepo:
         return self.conn.execute(
             """
             SELECT i.*, c.work_type AS manual_work_type, c.skill_id,
-                c.work_type AS work_type
+                coalesce(c.work_type, a.work_type) AS work_type
             FROM activity_interval i
             LEFT JOIN classification c ON c.session_id = i.session_id AND c.local_date = ?
+            LEFT JOIN agent_classification a
+                ON a.session_id = i.session_id AND a.local_date = ?
             WHERE i.ended_at > ? AND i.started_at < ?
             ORDER BY i.started_at, i.session_id
             """,
-            (day.isoformat(), to_db(start), to_db(end)),
+            (day.isoformat(), day.isoformat(), to_db(start), to_db(end)),
         ).fetchall()
 
     def save_classification(
