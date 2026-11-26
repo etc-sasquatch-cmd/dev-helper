@@ -8,7 +8,7 @@ Read `docs/SPEC.md` for the section you are building before you start a mileston
 It holds the data model, milestone acceptance criteria, and integration rules.
 
 ## Stack (do not swap without asking)
-- Python 3.13, NiceGUI in native mode (pywebview + WebView2), SQLite, Pydantic, httpx, matplotlib
+- Python 3.13, NiceGUI in native mode (pywebview + WebView2), SQLite, Pydantic, PyYAML, httpx, matplotlib
 - Tests: pytest. Lint and format: ruff.
 - JavaScript only where a browser API requires it, currently the YouTube IFrame player.
   Keep it in one small file. Everything else is Python.
@@ -99,8 +99,8 @@ End each milestone with this report so I can review it elsewhere:
 4. Deviations from SPEC and why
 5. Known risks or anything unverified
 
-## Status (updated 2026-11-10)
-Read the newest `brief_*.md` in the repo root for the details behind this list.
+## Status (updated 2026-11-26)
+The `brief_*.md` files cover the early milestones. M7 verification is recorded below.
 
 Changes so far:
 - M0 risk spikes: done, all five passed.
@@ -109,9 +109,44 @@ Changes so far:
   music follows the timer, inline recap panel, player always visible at 200 px tall.
 - M3 Spotify: built, then removed before any commit. I wanted Spotify to play inside the widget;
   the built version only remote-controlled a separate Spotify app, so I dropped it.
+- M4 added skills, versioned targets, and local roadmaps.
+- M5 added opt-in Claude Code capture and a reversible hook installer.
+- M6 added quarter and day reports, charts, and manual classification.
+- M7 added reviewer previews, AI classifications, and locally graded recall quizzes.
 
-NEXT:
-1. M4 skills and roadmaps (SPEC section 5 and the M4 checklist). Plan first and wait for approval.
-2. Before planning M4, ask me for the path to my local clone of the roadmap repository and
-   inspect its real file format. Do not assume its structure.
-3. Still untested from M2: a real YouTube playlist link (`list=PL...`). Ask me to try one.
+### M7 live smoke tests (2026-11-26)
+
+All five tasks passed through the final M7 runner with Claude Haiku 5.5. Each run used
+synthetic input and scratch files inside `dev-helper`.
+
+| Task | Result | Evidence |
+| --- | --- | --- |
+| Summarize | Passed on attempt 1 (8.53 s) | Returned a low-confidence day summary for 25 study minutes, one completed focus session, zero recaps, and zero evidence items. Suggested checking local aggregates and adding a recap in FocusDeck. |
+| Work Critic | Passed on attempt 2 (17.55 s total) | The privacy validator rejected the first reply for requesting raw records or sensitive data. The runner retried once with the identical request. The scratch database confirmed the rejected reply was excluded from the cache and the accepted low-confidence reply was cached. |
+| Study Judge | Passed on attempt 1 (10.81 s) | Returned a low-confidence review, flagged the claimed topic with missing evidence, flagged no neglected skills, and returned three study actions. |
+| Classify | Passed on attempt 1 (5.62 s) | Classified synthetic session `S1` as `Other` with low confidence and cited `S1`. |
+| Recall quiz | Passed on attempt 1 (7.98 s) | Returned three distinct Git questions about `git commit`, `git stash`, and `HEAD`, each with four choices and a correct answer index. |
+
+### M7 closeout (2026-11-26)
+
+- **Quarter review:** A synthetic Q1 became pending at the configured quarter boundary.
+  The NiceGUI reviewer dialog preselected Q1 and previewed the request. Approval sent
+  only Q1's 25 study minutes to the injected reviewer, excluding the seeded Q2 activity.
+  The quarter was marked seen and the summary appeared in the dialog.
+- **Local quiz:** The dialog rejected an incomplete submission. A 2/3 score was saved
+  without E2 evidence. A fresh quiz scored 3/3, saved E2 evidence, and verified the topic.
+  The only reviewer calls generated the quizzes. Grading made zero reviewer calls.
+- **Usage display:** The result panel displayed the synthetic reviewer's token counts
+  (`85 in / 24 out tokens`). The UI checks drove the actual NiceGUI dialog through its
+  interaction simulator with an injected transport and scratch SQLite data.
+- **Regression checks:** Full pytest suite passed (151 tests). Ruff lint passed and all
+  65 checked files passed Ruff formatting. The suite covers synthetic prompt evaluation
+  and the reviewer capture exclusion. The five live smoke tests above verify the CLI
+  transport with Claude.
+
+M7 verification is complete. M7 is the final numbered SPEC milestone. Judge-reviewed
+artifact verification remains outstanding.
+
+### Historical follow-ups from 2026-11-10
+
+- Still untested from M2: a real YouTube playlist link (`list=PL...`).
