@@ -29,6 +29,7 @@ from focusdeck.ui.capture import capture_dialog, settings_path
 from focusdeck.ui.day import day_dialog
 from focusdeck.ui.review import reviewer_dialog
 from focusdeck.ui.study import study_dialog
+from focusdeck.ui.theme import WIDGET_CSS
 
 log = logging.getLogger("focusdeck.ui")
 
@@ -46,11 +47,6 @@ PHASE_NAMES = {
     Phase.FOCUS: "Focus",
     Phase.SHORT_BREAK: "Short break",
     Phase.LONG_BREAK: "Long break",
-}
-PHASE_COLORS = {
-    Phase.FOCUS: "text-red-500",
-    Phase.SHORT_BREAK: "text-green-600",
-    Phase.LONG_BREAK: "text-blue-500",
 }
 
 
@@ -73,6 +69,8 @@ def build_page(
 ) -> None:
     compact = {"on": repo.get_setting(window.KEY_COMPACT, "0") == "1"}
     client = ui.context.client
+    ui.add_css(WIDGET_CSS)
+    ui.colors(primary="#5945c7")
 
     # YouTube only plays when it gets a Referer from a real http origin (else error 153).
     ui.add_head_html('<meta name="referrer" content="strict-origin-when-cross-origin">')
@@ -101,41 +99,43 @@ def build_page(
 
     # Timer display --------------------------------------------------------------
 
-    with ui.column().classes("w-full items-center gap-1 p-3"):
-        phase_label = ui.label().classes("text-sm font-medium uppercase tracking-wide")
-        time_label = ui.label().classes("text-6xl font-mono leading-none")
-        cycle_label = ui.label().classes("text-xs text-gray-500")
-        tag_label = ui.label().classes("text-xs text-gray-500")
+    timer_classes = "fd-timer w-full items-center gap-1"
+    with ui.column().classes("fd-widget w-full items-center gap-2"):
+        with ui.column().classes(timer_classes) as timer_panel:
+            phase_label = ui.label().classes("fd-phase")
+            time_label = ui.label().classes("fd-time")
+            cycle_label = ui.label().classes("fd-muted text-xs")
+            tag_label = ui.label().classes("fd-muted text-xs text-center break-words")
+            with ui.row().classes("w-full justify-center gap-1 mt-2 no-wrap"):
+                main_button = ui.button("Start").props("unelevated").classes("grow max-w-32")
+                skip_button = ui.button("Skip").props("flat")
+                reset_button = ui.button("Reset").props("flat")
 
-        with ui.row().classes("gap-2 mt-1 no-wrap"):
-            main_button = ui.button("Start").props("unelevated").classes("w-24")
-            skip_button = ui.button("Skip").props("outline")
-            reset_button = ui.button("Reset").props("outline")
-
-        # The official YouTube player. It is never hidden, covered, or smaller than 200x200.
-        player_box = ui.element("div").classes("w-full relative bg-black rounded overflow-hidden")
-        player_box.style("height: 200px; min-width: 200px; flex-shrink: 0")
-        with player_box:
-            ui.label("No music playing").classes(
-                "absolute inset-0 flex items-center justify-center text-xs text-gray-500"
-            )
-            ui.html(f'<div id="{PLAYER_ELEMENT_ID}"></div>', sanitize=False).classes(
-                "absolute inset-0"
-            )
-        with ui.row().classes("w-full items-center gap-1 no-wrap"):
-            music_label = ui.label().classes("grow text-xs text-gray-500 leading-tight")
-            play_button = ui.button("Play", icon="play_arrow").props("dense unelevated size=sm")
-        with ui.row().classes("w-full items-center gap-2 no-wrap"):
-            ui.icon("volume_up").classes("text-gray-500")
-            volume_slider = ui.slider(
-                min=0, max=100, step=1, value=int(repo.get_setting(KEY_VOLUME, "50") or 50)
-            ).classes("grow")
-            music_button = ui.button(icon="queue_music").props("flat dense").tooltip("Music")
+        with ui.column().classes("fd-card w-full gap-1"):
+            # Keep the official player at least 200x200 and uncovered while it plays.
+            player_box = ui.element("div").classes("w-full relative bg-black rounded-lg")
+            player_box.style("height: 200px; min-width: 200px; flex-shrink: 0")
+            with player_box:
+                ui.label("No music playing").classes(
+                    "absolute inset-0 flex items-center justify-center text-xs text-slate-300"
+                )
+                ui.html(f'<div id="{PLAYER_ELEMENT_ID}"></div>', sanitize=False).classes(
+                    "absolute inset-0"
+                )
+            with ui.row().classes("w-full items-center gap-1 no-wrap"):
+                music_label = ui.label().classes("fd-muted grow text-xs leading-tight")
+                play_button = ui.button("Play", icon="play_arrow").props("dense unelevated size=sm")
+            with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                ui.icon("volume_up").classes("fd-muted")
+                volume_slider = ui.slider(
+                    min=0, max=100, step=1, value=int(repo.get_setting(KEY_VOLUME, "50") or 50)
+                ).classes("grow")
+                music_button = ui.button(icon="queue_music").props("flat dense").tooltip("Music")
 
         # Recap prompt. Inline, not a pop-up, so it never covers the player.
         with ui.card().props("flat bordered").classes("w-full gap-1 p-2") as recap_panel:
             ui.label("What did you get done?").classes("text-sm font-medium")
-            recap_info = ui.label().classes("text-xs text-gray-500")
+            recap_info = ui.label().classes("fd-muted text-xs")
             recap_input = ui.input(placeholder="One line").props("dense outlined")
             recap_input.classes("w-full")
             with ui.row().classes("w-full justify-end gap-1"):
@@ -143,7 +143,7 @@ def build_page(
                 recap_save_button = ui.button("Save").props("unelevated dense")
         recap_panel.set_visibility(False)
 
-        details = ui.column().classes("w-full gap-2 mt-2")
+        details = ui.column().classes("fd-card w-full gap-2")
         footer = ui.row().classes("w-full justify-between items-center no-wrap")
 
     # Skill, work type, preset ---------------------------------------------------
@@ -221,7 +221,7 @@ def build_page(
             capture_button = ui.button("Capture").props("dense flat")
 
     with footer:
-        stats_label = ui.label().classes("grow min-w-0 text-xs text-gray-500")
+        stats_label = ui.label().classes("fd-muted grow min-w-0 text-xs")
         with ui.row().classes("shrink-0 gap-1 no-wrap"):
             day_button = ui.button("Day").props("flat dense")
             compact_button = ui.button(icon="unfold_less").props("flat dense").tooltip("Compact")
@@ -661,7 +661,7 @@ def build_page(
         elif state.status is Status.IDLE:
             phase_text += " (ready)"
         phase_label.text = phase_text
-        phase_label.classes(replace=f"text-sm font-medium uppercase {PHASE_COLORS[state.phase]}")
+        timer_panel.classes(replace=f"{timer_classes} fd-{state.phase.value.replace('_', '-')}")
         time_label.text = format_time(service.remaining_seconds())
 
         preset = service.preset()
