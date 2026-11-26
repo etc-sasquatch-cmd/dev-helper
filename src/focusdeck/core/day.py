@@ -43,6 +43,7 @@ class QuarterSummary:
     recaps: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
     skipped_recap_count: int = 0
+    verified_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -125,11 +126,12 @@ def _focus_spans(store: DayRepo, block) -> list[Span]:
     return spans
 
 
-def _allocation(store: DayRepo, spans: list[Span], windows, skills) -> list[AllocationRow]:
+def active_allocation(
+    store: DayRepo, spans: list[Span], start: datetime, end: datetime, skills: dict[int, str]
+) -> list[AllocationRow]:
     if not spans:
         return []
     study = StudyRepo(store.repo)
-    start, end = windows[0][0], windows[-1][1]
     changes = [from_db(row["effective_at"]) for row in store.target_changes(start, end)]
     versions = [(point, study.targets_at(point)) for point in (start, *changes)]
     actual: Counter[int | None] = Counter()
@@ -223,8 +225,10 @@ def build_day(
         label, state = EVIDENCE_NAMES[row["kind"]]
         movement = f" → {state}" if row["first_level"] else ""
         line = f"{row['roadmap']} · {row['title']} · {label}{movement}"
-        total.evidence.append(line)
-        bucket(from_db(row["recorded_at"])).evidence.append(line)
+        for summary in (total, bucket(from_db(row["recorded_at"]))):
+            summary.evidence.append(line)
+            if row["first_level"] and state == "Verified":
+                summary.verified_count += 1
 
     roadmap = Counter(node["state"] for node in StudyRepo(store.repo).nodes())
     return DayReport(
@@ -234,7 +238,7 @@ def build_day(
         merged,
         quarters,
         total,
-        _allocation(store, merged, windows, skills),
+        active_allocation(store, merged, start, end, skills),
         roadmap,
         sessions,
         any(span.estimated for span in clipped),

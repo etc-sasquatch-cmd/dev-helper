@@ -10,6 +10,7 @@ from matplotlib.patches import Patch
 
 from focusdeck.core.calendar import BUCKETS
 from focusdeck.core.day import DayReport
+from focusdeck.core.trends import TrendsReport
 
 CHARTS = {
     "timeline": "Day timeline",
@@ -169,6 +170,29 @@ def draw_chart(report: DayReport, key: str) -> bytes | None:
         if not _RENDERERS[key](figure, report):
             return None
         figure.suptitle(CHARTS[key], fontsize=13, fontweight="bold")
+        buffer = BytesIO()
+        FigureCanvasAgg(figure).print_png(buffer)
+        return buffer.getvalue()
+
+
+def draw_trends_chart(report: TrendsReport) -> bytes | None:
+    if not report.seconds:
+        return None
+    with _RENDER_LOCK:
+        figure = Figure(figsize=(4, 2.4), layout="constrained")
+        ax = figure.subplots()
+        daily = list(report.daily_seconds.items())
+        weekly = (report.end - report.start).days == 6
+        ticks = range(0, len(daily), 1 if weekly else 5)
+        ax.bar(range(len(daily)), [seconds / 60 for _, seconds in daily], color="#5945c7")
+        ax.set(
+            ylabel="Active minutes",
+            xlabel="Local day" if weekly else "Day of month",
+            xticks=ticks,
+            xticklabels=[daily[i][0].strftime("%a") if weekly else daily[i][0].day for i in ticks],
+        )
+        ax.set_axisbelow(True)
+        ax.grid(axis="y", alpha=0.25)
         buffer = BytesIO()
         FigureCanvasAgg(figure).print_png(buffer)
         return buffer.getvalue()

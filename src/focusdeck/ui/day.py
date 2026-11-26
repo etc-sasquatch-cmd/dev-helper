@@ -2,6 +2,7 @@
 
 import base64
 import logging
+from contextlib import closing
 from datetime import date
 
 from nicegui import run, ui
@@ -9,8 +10,11 @@ from nicegui import run, ui
 from focusdeck.core.clock import Clock
 from focusdeck.core.day import DayReport, build_day
 from focusdeck.core.timer import WORK_TYPES
+from focusdeck.core.trends import TrendsReport, build_trends
+from focusdeck.db.connection import connect
 from focusdeck.db.day import DayRepo
-from focusdeck.reports.charts import CHARTS, EMPTY, draw_chart
+from focusdeck.db.repo import Repo
+from focusdeck.reports.charts import CHARTS, EMPTY, draw_chart, draw_trends_chart
 from focusdeck.reports.export import allocation_lines, export_day, summary_lines
 
 log = logging.getLogger(__name__)
@@ -26,6 +30,7 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
     today = clock.now().astimezone().date()
     report: DayReport | None = None
     chart_request = 0
+    trends_request = 0
 
     with ui.dialog() as dialog, ui.card().classes("w-[520px] max-h-[85vh] overflow-y-auto gap-2"):
         with ui.row().classes("w-full items-center justify-between no-wrap"):
@@ -35,8 +40,10 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
             ui.input("Date", value=today.isoformat()).classes("w-full").props("type=date dense")
         )
         with ui.tabs().classes("w-full").props("dense no-caps align=justify") as tabs:
-            day_tab, chart_tab, setup_tab = (ui.tab(name) for name in ("Day", "Charts", "Setup"))
-            for tab in (day_tab, chart_tab, setup_tab):
+            day_tab, chart_tab, trends_tab, setup_tab = (
+                ui.tab(name) for name in ("Day", "Charts", "Trends", "Setup")
+            )
+            for tab in (day_tab, chart_tab, trends_tab, setup_tab):
                 tab.classes("px-1").style("min-width: 0")
 
         with ui.tab_panels(tabs, value=day_tab, animated=False).classes("w-full"):
@@ -80,6 +87,11 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
                 with ui.element("div").classes("w-full overflow-x-auto") as chart_frame:
                     chart_image = ui.image().style("width: 100%").props("fit=contain")
                 chart_frame.set_visibility(False)
+
+            with ui.tab_panel(trends_tab).classes("p-0"):
+                period = ui.select(["Week", "Month"], value="Week", label="Period").props("dense")
+                trends_status = ui.label().classes("w-full text-xs")
+                trend_body = ui.column().classes("w-full gap-2")
 
             with ui.tab_panel(setup_tab).classes("p-0"):
                 ui.label("Correct Claude activity").classes("font-medium")
@@ -167,9 +179,83 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
             zoom.set_visibility(True)
         chart_status.text = "" if png else EMPTY[key]
 
+    def load_trends(day, selected_period, local_today):
+        with closing(connect(folder / "focusdeck.sqlite")) as conn:
+            conn.execute("BEGIN")
+            snapshot = build_trends(DayRepo(Repo(conn)), day, selected_period, local_today)
+        return snapshot, draw_trends_chart(snapshot)
+
+    def render_trends(snapshot: TrendsReport, png: bytes | None) -> None:
+        suffix = ""
+        if snapshot.start <= snapshot.today <= snapshot.end:
+            suffix = " · In progress"
+        elif snapshot.today < snapshot.start:
+            suffix = " · Upcoming"
+        with trend_body:
+            ui.label(f"{snapshot.start:%Y-%m-%d} to {snapshot.end:%Y-%m-%d}{suffix}").classes(
+                "font-medium"
+            )
+            ui.label(f"{snapshot.seconds / 60:.1f} active minutes").classes("font-medium")
+            if png:
+                ui.image("data:image/png;base64," + base64.b64encode(png).decode("ascii")).props(
+                    'alt="Active minutes by day" fit=contain'
+                ).classes("w-full")
+            else:
+                ui.label("No active time recorded for this period.").classes("text-xs")
+            ui.label(
+                f"{snapshot.completed} completed focus blocks"
+                f" · {snapshot.saved_recaps} recaps saved · {snapshot.skipped_recaps} skipped"
+                f" · Newly verified topics {snapshot.newly_verified}"
+            ).classes("w-full text-xs")
+            if snapshot.estimated:
+                ui.label("Placement of older paused focus time is estimated.").classes("text-xs")
+            if snapshot.work:
+                with ui.expansion("Work types").classes("w-full").props("dense"):
+                    for name, seconds in snapshot.work.most_common():
+                        ui.label(f"{name} · {seconds / 60:.1f} min").classes("text-xs")
+                with ui.expansion("Skills and allocation").classes("w-full").props("dense"):
+                    for name, seconds in snapshot.skills.most_common():
+                        ui.label(f"{name} · {seconds / 60:.1f} min").classes(
+                            "w-full break-words text-xs"
+                        )
+                    for line in allocation_lines(snapshot):
+                        ui.label(line).classes("w-full break-words text-xs")
+
+    async def update_trends() -> None:
+        nonlocal trends_request
+        trends_request += 1
+        request = trends_request
+        active = tabs.value == trends_tab.props["name"]
+        review_button.set_visibility(not active)
+        export_button.set_visibility(not active)
+        export_status.set_visibility(not active)
+        if not active:
+            return
+        trend_body.clear()
+        current = report
+        trends_status.text = "Loading trends…" if current else "Choose a valid report date."
+        if current is None:
+            return
+        try:
+            snapshot, png = await run.io_bound(
+                load_trends, current.day, period.value, clock.now().astimezone().date()
+            )
+        except Exception:
+            log.exception("Could not load trends.")
+            if request == trends_request:
+                trends_status.text = "Could not load trends for this period."
+            return
+        if request == trends_request:
+            trends_status.text = ""
+            render_trends(snapshot, png)
+
+    async def update_visible_report() -> None:
+        await update_trends()
+        await update_chart()
+
     async def change_date() -> None:
         update_report()
-        await update_chart()
+        await update_visible_report()
 
     def save_correction(clear: bool = False) -> None:
         if report is None or session.value not in report.sessions:
@@ -217,7 +303,8 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
     session.on_value_change(lambda _: update_correction())
     zoom.on_value_change(lambda e: chart_image.style(f"width: {'700px' if e.value else '100%'}"))
     pick_chart.on_value_change(update_chart)
-    tabs.on_value_change(update_chart)
+    tabs.on_value_change(update_visible_report)
+    period.on_value_change(update_trends)
     save_correction_button.on_click(save_correction)
     clear_correction_button.on_click(lambda: save_correction(clear=True))
     save_hours_button.on_click(save_hours)
@@ -228,6 +315,6 @@ def day_dialog(store: DayRepo, clock: Clock, folder, on_dialog_toggled, toast, s
     async def open_dialog() -> None:
         update_report()
         dialog.open()
-        await update_chart()
+        await update_visible_report()
 
     return open_dialog

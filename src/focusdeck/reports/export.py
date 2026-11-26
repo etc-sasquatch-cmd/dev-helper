@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 from focusdeck.core.day import DayReport, QuarterSummary
+from focusdeck.core.trends import TrendsReport
 from focusdeck.reports.charts import CHARTS, EMPTY, draw_chart
 
 
@@ -25,7 +26,7 @@ def summary_lines(summary: QuarterSummary) -> list[str]:
     ]
 
 
-def allocation_lines(report: DayReport) -> list[str]:
+def allocation_lines(report: DayReport | TrendsReport) -> list[str]:
     def percent(value):
         return f"{value:.1f}%" if value is not None else "—"
 
