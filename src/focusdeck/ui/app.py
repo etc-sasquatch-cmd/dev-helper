@@ -2,11 +2,14 @@
 
 import logging
 import multiprocessing
+import sqlite3
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from nicegui import app, ui
+from nicegui import run as nicegui_run
 
+from focusdeck.capture.ingest import ingest
 from focusdeck.core.clock import SystemClock
 from focusdeck.core.service import AUTO_START_GRACE_SECONDS, PhaseEnded, TimerService
 from focusdeck.core.timer import WORK_TYPES, Phase, Status, TimerError
@@ -18,6 +21,7 @@ from focusdeck.music.links import parse_youtube_link
 from focusdeck.music.provider import MusicSource
 from focusdeck.music.youtube import PLAYER_ELEMENT_ID, PLAYER_JS, YouTubeProvider, describe_error
 from focusdeck.ui import alerts, window
+from focusdeck.ui.capture import capture_dialog, settings_path
 from focusdeck.ui.study import study_dialog
 
 log = logging.getLogger("focusdeck.ui")
@@ -54,7 +58,12 @@ def toast(message: str, kind: str = "warning") -> None:
     ui.notify(message, type=kind, position="top")
 
 
-def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
+def build_page(
+    service: TimerService,
+    repo: Repo,
+    cache_dir: Path,
+    capture_settings: Path | None = None,
+) -> None:
     compact = {"on": repo.get_setting(window.KEY_COMPACT, "0") == "1"}
     client = ui.context.client
 
@@ -202,6 +211,7 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
             auto_switch = ui.switch("Auto-start breaks", value=service.auto_start_breaks).props(
                 "dense"
             )
+            capture_button = ui.button("Capture").props("dense flat")
 
     with footer:
         stats_label = ui.label().classes("text-xs text-gray-500")
@@ -560,6 +570,11 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
     study_button.on_click(
         study_dialog(study, service, refresh_topic_options, on_dialog_toggled, toast)
     )
+    capture_button.on_click(
+        capture_dialog(
+            repo, cache_dir, capture_settings or settings_path(), on_dialog_toggled, toast
+        )
+    )
     # Controls -------------------------------------------------------------------------
 
     def guarded(action) -> None:
@@ -695,6 +710,16 @@ def run() -> None:
 
     repo = Repo(open_database(folder / "focusdeck.sqlite"))
     service = TimerService(repo, SystemClock())
+    capture_settings = settings_path()
+
+    async def ingest_capture() -> None:
+        try:
+            await nicegui_run.io_bound(ingest, folder, capture_settings.parent / "projects")
+        except (OSError, sqlite3.Error):
+            log.warning("Capture could not process local records. It will retry.")
+
+    app.timer(5.0, ingest_capture, immediate=False)
+
     geometry = window.load_geometry(repo, window.virtual_screen())
     app.native.window_args["on_top"] = geometry.on_top
     app.native.window_args["min_size"] = window.MIN_SIZE
@@ -703,7 +728,7 @@ def run() -> None:
 
     @ui.page("/")
     def index() -> None:
-        build_page(service, repo, folder)
+        build_page(service, repo, folder, capture_settings)
 
     ui.run(
         native=True,
