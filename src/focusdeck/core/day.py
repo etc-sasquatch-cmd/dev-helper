@@ -42,6 +42,7 @@ class QuarterSummary:
     completed: int = 0
     recaps: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
+    skipped_recap_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,8 @@ def build_day(
                 summary.completed += 1
                 if block["recap"]:
                     summary.recaps.append(block["recap"])
+                elif block["recap_skipped"]:
+                    summary.skipped_recap_count += 1
 
     for row in store.claude_intervals(day, start, end):
         session_id, work, skill = row["session_id"], row["work_type"], row["skill_id"]

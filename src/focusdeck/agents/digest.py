@@ -255,6 +255,7 @@ def prepare(
         and not any(not detail["thin"] for detail in session_details.values()),
     }
     if task == "Study Judge":
+        metrics["M3"]["skipped_recap_count"] = summary.skipped_recap_count
         study = StudyRepo(store.repo)
         shares = {row.skill: row for row in report.allocation}
         skills, topics = {}, {}

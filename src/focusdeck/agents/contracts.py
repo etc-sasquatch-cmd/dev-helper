@@ -121,6 +121,7 @@ PROMPTS = {
     ),
     "Study Judge": (
         "Evaluate each supplied skill. Use the supplied target gaps and evidence levels. "
+        "Use skipped_recap_count only to assess recap coverage. "
         "Flag only claimed topics that lack E2 and only neglected skills supported by a gap. "
         "Provide three study actions, prioritizing recall and evidence."
     ),

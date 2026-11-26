@@ -100,6 +100,40 @@ def test_digest_rechecks_policy_and_never_serializes_private_text(repo, tmp_path
     assert not request.digest["thin"]
 
 
+def test_study_judge_counts_only_explicitly_skipped_recaps_in_review_period(
+    repo, skill_id, tmp_path
+):
+    def finish_focus(ended_at):
+        block = repo.insert_running_block(
+            phase="focus",
+            skill_id=skill_id,
+            work_type="Study",
+            planned_seconds=300,
+            started_at=ended_at - timedelta(minutes=5),
+            ends_at=ended_at,
+        )
+        repo.finish_block(block, status="completed", ended_at=ended_at, elapsed_seconds=300)
+        return block
+
+    repo.skip_recap(finish_focus(local(9) - timedelta(days=1)))
+    repo.skip_recap(finish_focus(local(9)))
+    repo.save_recap(finish_focus(local(9, 30)), "Private recap text")
+    repo.skip_recap(finish_focus(local(10)))  # Q2, even though the block started in Q1.
+    finish_focus(local(10, 30))  # The recap is still pending.
+
+    store = DayRepo(repo)
+    for period, expected in (("Day", 2), ("Q1", 1), ("Q2", 1), ("Q3", 0)):
+        digest = prepare(store, tmp_path, DAY, "Study Judge", period).digest
+        count = digest["metrics"]["M3"]["skipped_recap_count"]
+        assert type(count) is int
+        assert count == expected
+        assert "Private recap text" not in json.dumps(digest)
+
+    for task in ("Work Critic", "Summarize", "Classify"):
+        digest = prepare(store, tmp_path, DAY, task).digest
+        assert "skipped_recap_count" not in digest["metrics"]["M3"]
+
+
 @pytest.mark.parametrize("example", ["good", "bad", "thin"])
 def test_contracts_for_good_bad_and_thin_examples(example):
     digest = {
