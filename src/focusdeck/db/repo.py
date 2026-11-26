@@ -50,6 +50,7 @@ class BlockRow:
     elapsed_seconds: float | None
     recap: str | None
     recap_skipped: bool
+    node_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,7 @@ def _block(row: sqlite3.Row) -> BlockRow:
         elapsed_seconds=row["elapsed_seconds"],
         recap=row["recap"],
         recap_skipped=bool(row["recap_skipped"]),
+        node_id=row["node_id"],
     )
 
 
@@ -195,14 +197,36 @@ class Repo:
         planned_seconds: int,
         started_at: datetime,
         ends_at: datetime,
+        node_id: int | None = None,
     ) -> int:
         cursor = self.conn.execute(
             "INSERT INTO pomodoro_block (phase, status, skill_id, work_type, planned_seconds, "
-            "started_at, ends_at) VALUES (?, 'running', ?, ?, ?, ?, ?)",
-            (phase, skill_id, work_type, planned_seconds, to_db(started_at), to_db(ends_at)),
+            "started_at, ends_at, node_id) VALUES (?, 'running', ?, ?, ?, ?, ?, ?)",
+            (
+                phase,
+                skill_id,
+                work_type,
+                planned_seconds,
+                to_db(started_at),
+                to_db(ends_at),
+                node_id,
+            ),
         )
         assert cursor.lastrowid is not None
         return cursor.lastrowid
+
+    def skill_has_node(self, skill_id: int, node_id: int) -> bool:
+        return (
+            self.conn.execute(
+                """
+                SELECT 1 FROM skill_roadmap_node AS link
+                JOIN roadmap_node AS node ON node.id = link.node_id
+                WHERE link.skill_id = ? AND link.node_id = ? AND node.skipped = 0
+                """,
+                (skill_id, node_id),
+            ).fetchone()
+            is not None
+        )
 
     def mark_paused(self, block_id: int, remaining_seconds: float) -> None:
         self.conn.execute(

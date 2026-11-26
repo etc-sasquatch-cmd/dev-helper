@@ -124,15 +124,23 @@ class TimerService:
 
     # actions ----------------------------------------------------------------
 
-    def _start(self, skill_id: int | None, work_type: str | None, now: datetime) -> None:
+    def _start(
+        self,
+        skill_id: int | None,
+        work_type: str | None,
+        now: datetime,
+        node_id: int | None = None,
+    ) -> None:
         phase = self.state.phase
         if phase is Phase.FOCUS:
             if skill_id is None:
                 raise TimerError("choose a skill before starting a focus block")
             if work_type not in timer.WORK_TYPES:
                 raise TimerError("choose a work type before starting a focus block")
+            if node_id is not None and not self.repo.skill_has_node(skill_id, node_id):
+                raise TimerError("choose a roadmap topic linked to this skill")
         else:
-            skill_id, work_type = None, None
+            skill_id, work_type, node_id = None, None, None
         new_state = timer.start(self.state, self.preset(), now)
         assert new_state.planned_seconds is not None and new_state.ends_at is not None
         self.block_id = self.repo.insert_running_block(
@@ -142,11 +150,17 @@ class TimerService:
             planned_seconds=new_state.planned_seconds,
             started_at=now,
             ends_at=new_state.ends_at,
+            node_id=node_id,
         )
         self.state = new_state
 
-    def start(self, skill_id: int | None = None, work_type: str | None = None) -> None:
-        self._start(skill_id, work_type, self.clock.now())
+    def start(
+        self,
+        skill_id: int | None = None,
+        work_type: str | None = None,
+        node_id: int | None = None,
+    ) -> None:
+        self._start(skill_id, work_type, self.clock.now(), node_id)
 
     def pause(self) -> None:
         new_state = timer.pause(self.state, self.clock.now())

@@ -12,11 +12,13 @@ from focusdeck.core.service import AUTO_START_GRACE_SECONDS, PhaseEnded, TimerSe
 from focusdeck.core.timer import WORK_TYPES, Phase, Status, TimerError
 from focusdeck.db.connection import data_dir, open_database
 from focusdeck.db.repo import Repo
+from focusdeck.db.study import StudyRepo
 from focusdeck.music.controller import MusicController
 from focusdeck.music.links import parse_youtube_link
 from focusdeck.music.provider import MusicSource
 from focusdeck.music.youtube import PLAYER_ELEMENT_ID, PLAYER_JS, YouTubeProvider, describe_error
 from focusdeck.ui import alerts, window
+from focusdeck.ui.study import study_dialog
 
 log = logging.getLogger("focusdeck.ui")
 
@@ -133,6 +135,21 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
     def skill_options() -> dict[int, str]:
         return {skill.id: skill.name for skill in repo.list_skills()}
 
+    study = StudyRepo(repo)
+
+    def refresh_topic_options(*, keep_selection: bool = True) -> None:
+        options = (
+            {
+                row["id"]: f"{row['roadmap']} · {row['title']}"
+                for row in study.nodes(skill_select.value)
+                if row["state"] != "skipped"
+            }
+            if skill_select.value is not None
+            else {}
+        )
+        value = topic_select.value if keep_selection and topic_select.value in options else None
+        topic_select.set_options(options, value=value)
+
     def preset_options() -> dict[int, str]:
         return {preset.id: preset.name for preset in repo.list_presets()}
 
@@ -155,6 +172,17 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
                 and repo.set_setting(KEY_LAST_SKILL, str(e.value)),
             ).classes("grow").props("dense outlined")  # fmt: skip
             add_skill_button = ui.button(icon="add").props("flat dense").tooltip("New skill")
+        with ui.row().classes("w-full items-center gap-1 no-wrap"):
+            topic_select = (
+                ui.select(
+                    {},
+                    label="Topic (optional)",
+                    with_input=True,
+                )
+                .classes("grow min-w-0")
+                .props("dense outlined clearable")
+            )
+            study_button = ui.button("Study").props("flat dense")
         work_select = ui.select(
             list(WORK_TYPES),
             label="Work type",
@@ -178,6 +206,9 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
     with footer:
         stats_label = ui.label().classes("text-xs text-gray-500")
         compact_button = ui.button(icon="unfold_less").props("flat dense").tooltip("Compact")
+
+    skill_select.on_value_change(lambda _: refresh_topic_options(keep_selection=False))
+    refresh_topic_options()
 
     # New skill dialog -------------------------------------------------------------
 
@@ -514,13 +545,21 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
     music_button.on_click(open_music_dialog)
 
     # A dialog would cover the player, and it may not play while covered: pause meanwhile.
+    open_dialogs: set[int] = set()
+
     def on_dialog_toggled(e) -> None:
-        music.set_covered(bool(e.value))
+        if e.value:
+            open_dialogs.add(e.sender.id)
+        else:
+            open_dialogs.discard(e.sender.id)
+        music.set_covered(bool(open_dialogs))
         update_music_label()
 
     for dialog in (skill_dialog, preset_dialog, music_dialog):
         dialog.on_value_change(on_dialog_toggled)
-
+    study_button.on_click(
+        study_dialog(study, service, refresh_topic_options, on_dialog_toggled, toast)
+    )
     # Controls -------------------------------------------------------------------------
 
     def guarded(action) -> None:
@@ -533,7 +572,9 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
     def on_main_button() -> None:
         status = service.state.status
         if status is Status.IDLE:
-            guarded(lambda: service.start(skill_select.value, work_select.value))
+            guarded(
+                lambda: service.start(skill_select.value, work_select.value, topic_select.value)
+            )
         elif status is Status.RUNNING:
             guarded(service.pause)
         else:
@@ -596,7 +637,7 @@ def build_page(service: TimerService, repo: Repo, cache_dir: Path) -> None:
         else:
             tag_label.text = ""
         # The tag is chosen before a focus block starts and is fixed while it runs.
-        for control in (skill_select, add_skill_button, work_select):
+        for control in (skill_select, add_skill_button, work_select, topic_select):
             control.set_enabled(not in_focus)
 
         main_button.text = {
@@ -654,7 +695,6 @@ def run() -> None:
 
     repo = Repo(open_database(folder / "focusdeck.sqlite"))
     service = TimerService(repo, SystemClock())
-
     geometry = window.load_geometry(repo, window.virtual_screen())
     app.native.window_args["on_top"] = geometry.on_top
     app.native.window_args["min_size"] = window.MIN_SIZE
