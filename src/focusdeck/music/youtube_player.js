@@ -7,14 +7,17 @@ const fd = {
   ready: false,
   apiRequested: false,
   wanted: null, // {kind, id}: the newest thing Python asked for
+  loaded: null,
+  shouldPlay: false,
   volume: 50,
   errorsInARow: 0,
 };
 
 function fdApplyWanted() {
   const w = fd.wanted;
-  if (!fd.ready || !w) return;
+  if (!fd.ready || !fd.shouldPlay || !w) return;
   fd.player.setVolume(fd.volume);
+  fd.loaded = w;
   if (w.kind === "playlist") {
     fd.player.setLoop(true);
     fd.player.loadPlaylist({ listType: "playlist", list: w.id });
@@ -62,6 +65,7 @@ function fdCreatePlayer() {
 
 function fdLoad(kind, id, volume) {
   fd.wanted = { kind: kind, id: id };
+  fd.shouldPlay = true;
   fd.volume = volume;
   fd.errorsInARow = 0;
   if (fd.ready) {
@@ -82,10 +86,14 @@ function fdLoad(kind, id, volume) {
 }
 
 function fdPlay() {
-  if (fd.ready) fd.player.playVideo();
+  fd.shouldPlay = true;
+  if (!fd.ready || !fd.wanted) return;
+  if (fd.loaded === fd.wanted) fd.player.playVideo();
+  else fdApplyWanted();
 }
 
 function fdPause() {
+  fd.shouldPlay = false;
   if (fd.ready) fd.player.pauseVideo();
 }
 

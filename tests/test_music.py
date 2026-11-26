@@ -1,3 +1,6 @@
+import shutil
+import subprocess
+
 import pytest
 
 from focusdeck.core.timer import Status
@@ -7,7 +10,7 @@ from focusdeck.db.repo import Repo
 from focusdeck.music.controller import MusicController
 from focusdeck.music.links import LinkError, parse_youtube_link
 from focusdeck.music.provider import MusicSource
-from focusdeck.music.youtube import YouTubeProvider, describe_error
+from focusdeck.music.youtube import PLAYER_JS, YouTubeProvider, describe_error
 
 VIDEO = "M7lc1UVf-VE"
 PLAYLIST = "PLabcdefghijklmnopqrstuvwxyz012345"
@@ -284,6 +287,55 @@ def test_unavailable_provider_is_left_alone_then_catches_up(music, provider):
 
 
 # YouTube provider -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("kind", "load_method"), [("playlist", "loadPlaylist"), ("video", "loadVideoById")]
+)
+def test_youtube_pause_before_ready_defers_playback(kind, load_method):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is needed to exercise the IFrame JavaScript without a browser")
+    subprocess.run(
+        [
+            node,
+            "-e",
+            """
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const [script, kind, loadMethod] = process.argv.slice(1);
+const calls = [];
+let events;
+function Player(_id, options) {
+  events = options.events;
+  for (const name of ['setVolume', 'setLoop', 'loadPlaylist', 'loadVideoById', 'playVideo']) {
+    this[name] = () => calls.push(name);
+  }
+}
+const context = vm.createContext({
+  YT: { Player }, emitEvent() {}, window: { location: { origin: 'http://localhost' } },
+  document: { createElement: () => ({}), head: { appendChild() {} } },
+});
+vm.runInContext(fs.readFileSync(script, 'utf8'), context);
+context.fdLoad(kind, 'sample-id', 50);
+context.fdPause();
+context.window.onYouTubeIframeAPIReady();
+events.onReady();
+assert.deepEqual(calls, []);
+context.fdPlay();
+assert.deepEqual(calls.filter(name => name.startsWith('load')), [loadMethod]);
+context.fdPlay();
+assert.equal(calls.at(-1), 'playVideo');
+assert.equal(calls.filter(name => name.startsWith('load')).length, 1);
+""",
+            str(PLAYER_JS),
+            kind,
+            load_method,
+        ],
+        check=True,
+        timeout=10,
+    )
 
 
 def test_youtube_provider_sends_quoted_commands():

@@ -162,6 +162,21 @@ artifact workflow is available under **Study → Roadmaps → Review artifact**.
   The swapped-result regression, synthetic UI check, all 158 tests, and Ruff
   lint and formatting checks passed.
 
-### Historical follow-ups from 2026-11-10
+### M2 native YouTube playlist smoke test (2026-11-26)
 
-- Still untested from M2: a real YouTube playlist link (`list=PL...`).
+- Saved the public [Google Search Stories playlist](https://www.youtube.com/playlist?list=PLBCF2DAC6FFB574DE)
+  in the scratch database and assigned it to Focus. The Music dialog showed the saved
+  playlist and Silence for both breaks. The native player loaded 10 tracks, played
+  the first, and advanced to the second automatically.
+- Opening Music paused the ready player, and closing it resumed the same track.
+  Skipping Focus to Short Break stopped playback. Starting the break kept it paused.
+  The playing iframe was fully on screen and measured about 255 by 200 CSS pixels.
+- The initial run exposed a startup race. A pause issued before the IFrame API
+  became ready was lost, so the first track began while the timer was paused.
+- The playback evidence came from the native window and IFrame state and time readings.
+  Audio was not independently checked. All 51 music tests passed.
+- After the fix, a native scratch run deliberately delayed player initialization.
+  The timer paused before readiness. The real playlist remained unloaded at 0 seconds
+  once the player was ready, then played track one and advanced past 1 second after
+  the timer resumed. All 53 music tests passed, including the new playlist and
+  single-video regression cases. No autoplay-blocked event was observed.

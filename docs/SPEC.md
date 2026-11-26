@@ -239,9 +239,9 @@ Each needs tests where logic exists and a real manual run.
 - [ ] Unit tests use a fake clock
 
 ### M2: YouTube music
-- [ ] Saved sources and per-phase profiles
-- [ ] Phase changes switch or stop music correctly
-- [ ] Player rules in section 4 are met
+- [x] Saved sources and per-phase profiles
+- [x] Phase changes switch or stop music correctly
+- [x] Player rules in section 4 are met. The native smoke test verified that a startup pause is honored.
 
 ### M3: Spotify
 - [ ] PKCE login with secure token storage and refresh
