@@ -1,4 +1,8 @@
 import json
+import os
+import shutil
+import subprocess
+import sys
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -132,6 +136,92 @@ def test_study_judge_counts_only_explicitly_skipped_recaps_in_review_period(
     for task in ("Work Critic", "Summarize", "Classify"):
         digest = prepare(store, tmp_path, DAY, task).digest
         assert "skipped_recap_count" not in digest["metrics"]["M3"]
+
+
+def test_portable_checkout_preview_uses_explicit_checkout_and_only_sends_indicators(
+    repo, tmp_path, monkeypatch
+):
+    checkout = tmp_path / "Selected checkout"
+    (checkout / ".git").mkdir(parents=True)
+    (checkout / "CLAUDE.md").write_text("PRIVATE RULE: run pytest and lint", encoding="utf-8")
+    Policy(reviewed=True).save(tmp_path)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("GIT_DIR", "unrelated")
+    monkeypatch.setattr("focusdeck.agents.digest.shutil.which", lambda _: None)
+    store = DayRepo(repo)
+    with pytest.raises(ValueError, match="absolute path"):
+        prepare(store, tmp_path, DAY, "Work Critic", "Q1", checkout=".")
+    with pytest.raises(ValueError, match="Add Git to PATH"):
+        prepare(store, tmp_path, DAY, "Work Critic", "Q1", checkout=str(checkout))
+    assert "M4" not in prepare(store, tmp_path, DAY, "Work Critic", "Q1").digest["metrics"]
+
+    git = str(tmp_path / "git.exe")
+    monkeypatch.setattr("focusdeck.agents.digest.shutil.which", lambda _: git)
+
+    def count_commits(args, **kwargs):
+        assert args[:6] == [
+            git,
+            "-C",
+            str(checkout),
+            f"--git-dir={checkout / '.git'}",
+            "rev-list",
+            "--count",
+        ]
+        assert "GIT_DIR" not in kwargs["env"]
+        return SimpleNamespace(stdout="2\n")
+
+    monkeypatch.setattr("focusdeck.agents.digest.subprocess.run", count_commits)
+    digest = prepare(store, tmp_path, DAY, "Work Critic", "Q1", checkout=str(checkout)).digest
+    assert digest["metrics"]["M4"] == {
+        "commit_count": 2,
+        "mentions_tests": True,
+        "mentions_lint": True,
+        "mentions_scope": False,
+    }
+    assert "PRIVATE RULE" not in json.dumps(digest)
+    assert "Selected checkout" not in json.dumps(digest)
+    Policy(reviewed=True, metadata_only=clean_paths(str(checkout))).save(tmp_path)
+    with pytest.raises(ValueError, match="full capture permission"):
+        prepare(store, tmp_path, DAY, "Work Critic", "Q1", checkout=str(checkout))
+
+
+def test_portable_checkout_with_incomplete_git_dir_does_not_use_parent(repo, tmp_path, monkeypatch):
+    git = shutil.which("git.exe" if os.name == "nt" else "git")
+    if git is None:
+        pytest.skip("Git is required to exercise repository discovery")
+
+    parent = tmp_path / "Parent checkout"
+    parent.mkdir()
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    subprocess.run([git, "-C", str(parent), "init", "--quiet"], check=True, env=env)
+    subprocess.run(
+        [
+            git,
+            "-C",
+            str(parent),
+            "-c",
+            "user.name=Synthetic Reviewer",
+            "-c",
+            "user.email=synthetic@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--allow-empty",
+            "--quiet",
+            "-m",
+            "Synthetic parent commit",
+        ],
+        check=True,
+        env=env,
+    )
+    checkout = parent / "Incomplete checkout"
+    (checkout / ".git").mkdir(parents=True)
+    Policy(reviewed=True).save(tmp_path)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+    with pytest.raises(ValueError, match="Could not read local Git activity for this checkout"):
+        prepare(DayRepo(repo), tmp_path, DAY, "Work Critic", "Q1", checkout=str(checkout))
 
 
 @pytest.mark.parametrize("example", ["good", "bad", "thin"])

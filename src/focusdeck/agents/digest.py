@@ -1,8 +1,11 @@
 """Build reviewer inputs from a fixed vocabulary and numeric signals."""
 
 import json
+import os
 import re
+import shutil
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -128,25 +131,37 @@ def _signals(store: DayRepo, session: str, windows, detail: bool) -> dict:
     return {**result, **indicators}
 
 
-def _checkout_counts(root: Path, selected: str, policy: Policy, windows) -> dict:
-    root = root.resolve()
-    relative = Path(selected)
-    path = (root / relative).resolve()
-    git_dir = path / ".git"
-    if relative.is_absolute() or not path.is_relative_to(root) or not git_dir.is_dir():
-        raise ValueError("Choose a checkout relative to the FocusDeck workspace.")
-    if not git_dir.resolve().is_relative_to(root):
-        raise ValueError("Choose a checkout whose Git directory is inside this workspace.")
+def _checkout_counts(root: Path | None, selected: str, policy: Policy, windows) -> dict:
+    selection = Path(selected)
+    if root is None:
+        if not selection.is_absolute():
+            raise ValueError("Enter the absolute path to a local Git checkout.")
+        path = selection.resolve()
+    else:
+        root = root.resolve()
+        path = (root / selection).resolve()
+        if selection.is_absolute() or not path.is_relative_to(root):
+            raise ValueError("Choose a checkout relative to the FocusDeck workspace.")
+    git_dir = (path / ".git").resolve()
+    if not git_dir.is_relative_to(path) or not git_dir.is_dir():
+        raise ValueError("Choose a checkout with a .git directory inside the checkout.")
     if policy.project_mode(project_keys(str(path))) != "full":
         raise ValueError("Project context requires full capture permission for this checkout.")
+    git = shutil.which("git.exe" if os.name == "nt" else "git")
+    if git is None:
+        raise ValueError(
+            "Git is needed for checkout context. Add Git to PATH or clear the checkout."
+        )
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
     count = 0
     for start, end, _ in windows:
         try:
             result = subprocess.run(
                 [
-                    "git",
+                    git,
                     "-C",
                     str(path),
+                    f"--git-dir={git_dir}",
                     "rev-list",
                     "--count",
                     f"--since={to_db(start)}",
@@ -157,6 +172,7 @@ def _checkout_counts(root: Path, selected: str, policy: Policy, windows) -> dict
                 text=True,
                 timeout=3,
                 check=True,
+                env=env,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             count += int(result.stdout.strip())
@@ -164,7 +180,7 @@ def _checkout_counts(root: Path, selected: str, policy: Policy, windows) -> dict
             raise ValueError("Could not read local Git activity for this checkout.") from None
     rules = path / "CLAUDE.md"
     context = {"commit_count": count}
-    if rules.resolve().is_relative_to(root) and rules.is_file():
+    if rules.resolve().is_relative_to(path) and rules.is_file():
         with rules.open("r", encoding="utf-8", errors="replace") as stream:
             text = stream.read(50_000)
         context["mentions_tests"] = bool(TEST.search(text))
@@ -245,7 +261,8 @@ def prepare(
             **_signals(store, session, windows, allowed[session] == "full"),
         }
     if checkout.strip() and task == "Work Critic":
-        metrics["M4"] = _checkout_counts(Path.cwd(), checkout, policy, windows)
+        root = None if getattr(sys, "frozen", False) else Path.cwd()
+        metrics["M4"] = _checkout_counts(root, checkout.strip(), policy, windows)
         labels["M4"] = "Selected checkout indicators"
     digest = {
         "period": period,

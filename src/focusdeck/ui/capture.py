@@ -43,10 +43,9 @@ def capture_dialog(repo: Repo, folder: Path, settings: Path, on_dialog_toggled, 
                 install_button = ui.button("Install hooks").props("dense flat")
                 uninstall_button = ui.button("Uninstall hooks").props("dense flat")
             if getattr(sys, "frozen", False):
-                install_button.disable()
-                ui.label("Use a source checkout to install capture hooks for now.").classes(
-                    "text-xs"
-                )
+                ui.label(
+                    "If you move the bundle, install the hooks again from its new location."
+                ).classes("text-xs")
             ui.button("Close", on_click=dialog.close).props("dense flat")
 
         with ui.column().classes("w-full min-w-0 gap-2") as confirmation:
@@ -114,7 +113,10 @@ def capture_dialog(repo: Repo, folder: Path, settings: Path, on_dialog_toggled, 
             return
         try:
             change = preview(settings, folder, install)
-        except (ValueError, OSError, RecursionError):
+        except ValueError as error:
+            toast(str(error))
+            return
+        except (OSError, RecursionError):
             toast("Could not preview Claude settings. Check that the file has valid JSON.")
             return
         if not change.has_changes:

@@ -16,10 +16,17 @@ The bundle includes Python and app assets. It requires the Microsoft Edge WebVie
 Evergreen Runtime. Claude-based reviews require a separate native Claude CLI on `PATH`.
 The app keeps data in `%LOCALAPPDATA%\FocusDeck` unless `FOCUSDECK_DATA_DIR` is set.
 
-This build is portable. App installation and upgrades, bundled capture-hook setup, and
-installer-managed workspace paths are future work. Use the source checkout to install
-capture hooks. For roadmap imports and optional Work Critic checkout context, set the
-working directory as described below.
+The portable app looks for roadmap inputs in the `roadmaps` subfolder of its data
+directory. In **Study → Roadmaps**, enter a path relative to the location shown.
+For optional Work Critic checkout context, enter the absolute path to one local
+checkout. Checkout context requires Git on `PATH` and full capture permission for
+that project. The checkout path stays local.
+
+The portable bundle includes `FocusDeckCapture/FocusDeckCapture.exe`. Use the app's
+Capture dialog to preview and approve hook setup. If you move the bundle, run
+**Install hooks** again from the new location to update the command path. Use
+**Uninstall hooks** before removing the bundle. A Windows setup program remains
+future work.
 
 ## Study tracking
 
@@ -31,8 +38,8 @@ logged time marks a topic Learning. Saving a recap on a completed focus block
 marks it Claimed. A perfect recall quiz or a confirmed passing artifact review marks
 the topic Verified.
 
-Run FocusDeck from the repository root to import from `data/roadmaps/`. For a
-local roadmap.sh checkout, enter the relative path to its roadmap folder, such
+When running from source, launch FocusDeck from the repository root to import from
+`data/roadmaps/`. For a local roadmap.sh checkout, enter the relative path to its roadmap folder, such
 as `developer-roadmap/roadmaps/backend`. FocusDeck reads topic IDs from the
 Markdown filenames. The current upstream checkout supplies a list of topics
 and the source link, with no graph order. You can also put a UTF-8 YAML file
@@ -64,7 +71,8 @@ and save the policy when ready. Use **Uninstall hooks** to preview removing
 FocusDeck's hooks. Settings changes keep a uniquely named backup beside the
 settings file.
 
-On Windows, FocusDeck's hooks launch directly with the current Python executable.
+Source hooks launch with the current Python executable. Portable hooks launch the
+bundled capture helper.
 The hook writes local metadata to a spool. While the widget is open it imports
 new events and redacted details into SQLite. It uses project path fingerprints
 for policy checks and follows only transcript paths beneath the configured

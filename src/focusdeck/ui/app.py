@@ -3,6 +3,7 @@
 import logging
 import multiprocessing
 import sqlite3
+import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -579,7 +580,15 @@ def build_page(
     reviewer = reviewer or AgentRunner(cache_dir)
     show_artifact = artifact_dialog(repo, service.clock, reviewer, on_dialog_toggled, toast)
     study_button.on_click(
-        study_dialog(study, service, refresh_topic_options, on_dialog_toggled, toast, show_artifact)
+        study_dialog(
+            study,
+            service,
+            refresh_topic_options,
+            on_dialog_toggled,
+            toast,
+            show_artifact,
+            roadmap_root=cache_dir / "roadmaps" if getattr(sys, "frozen", False) else None,
+        )
     )
     capture_button.on_click(
         capture_dialog(

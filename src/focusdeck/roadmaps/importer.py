@@ -55,7 +55,7 @@ def load_roadmap(root: Path, relative_path: str) -> tuple[str, RoadmapInput]:
     relative = Path(relative_path)
     path = (root / relative).resolve()
     if relative.is_absolute() or not path.is_relative_to(root) or path == root:
-        raise ValueError("Enter a path inside data/roadmaps.")
+        raise ValueError("Enter a relative path inside the roadmap folder.")
     if path.is_file() and path.suffix.lower() in (".yaml", ".yml"):
         try:
             with path.open("rb") as stream:

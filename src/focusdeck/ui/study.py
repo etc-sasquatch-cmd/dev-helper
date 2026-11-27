@@ -28,7 +28,10 @@ def study_dialog(
     on_dialog_toggled,
     toast,
     show_artifact,
+    *,
+    roadmap_root: Path | None = None,
 ):
+    root = roadmap_root if roadmap_root is not None else Path.cwd() / "data" / "roadmaps"
     with ui.dialog() as dialog, ui.card().classes("w-80 max-h-[85vh] overflow-auto gap-2"):
         with ui.tabs().classes("w-full").props("dense no-caps align=justify") as tabs:
             targets_tab = ui.tab("Targets")
@@ -82,9 +85,11 @@ def study_dialog(
                 targets_panel()
 
             with ui.tab_panel(roadmaps_tab).classes("p-0"):
+                if roadmap_root is not None:
+                    ui.label(str(root)).classes("w-full break-all text-xs")
                 source = (
                     ui.input(
-                        "Path within data/roadmaps",
+                        "Relative roadmap path" if roadmap_root else "Path within data/roadmaps",
                         value="developer-roadmap/roadmaps/backend",
                     )
                     .classes("w-full")
@@ -93,7 +98,7 @@ def study_dialog(
 
                 def import_topics() -> None:
                     try:
-                        key, roadmap = load_roadmap(Path.cwd() / "data" / "roadmaps", source.value)
+                        key, roadmap = load_roadmap(root, source.value)
                         study.import_roadmap(key, roadmap)
                     except ValidationError as error:
                         first = error.errors(include_input=False)[0]

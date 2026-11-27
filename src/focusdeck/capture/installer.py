@@ -11,6 +11,7 @@ from focusdeck.capture.hook import EVENTS
 from focusdeck.capture.policy import atomic_write
 
 MARKER = "--focusdeck-capture-v1"
+PORTABLE_HELPER = "FocusDeckCapture"
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict:
@@ -33,14 +34,29 @@ def _owns(hook: object) -> bool:
     if not isinstance(hook, dict) or hook.get("type") != "command":
         return False
     args = hook.get("args")
+    if not isinstance(args, list):
+        return False
+    executable = hook.get("command")
+    if len(args) == 3 and args[0] == MARKER and isinstance(executable, str):
+        return Path(executable).name.casefold() == f"{PORTABLE_HELPER.lower()}.exe"
     return (
-        isinstance(args, list)
-        and len(args) == 5
+        len(args) == 5
         and args[0] == "-B"
         and isinstance(args[1], str)
         and Path(args[1]).name == "hook.py"
         and args[2] == MARKER
     )
+
+
+def _hook_command(settings: Path, folder: Path) -> tuple[str, list[str]]:
+    executable = Path(sys.executable).absolute()
+    args = [MARKER, str(folder.resolve()), str((settings.parent / "projects").resolve())]
+    if getattr(sys, "frozen", False):
+        helper = executable.with_name(PORTABLE_HELPER) / f"{PORTABLE_HELPER}.exe"
+        if not helper.is_file():
+            raise ValueError("The portable capture helper is missing. Keep the bundle together.")
+        return str(helper), args
+    return str(executable), ["-B", str(Path(__file__).with_name("hook.py").resolve()), *args]
 
 
 @dataclass(frozen=True)
@@ -95,6 +111,7 @@ def preview(settings: Path, folder: Path, install: bool) -> SettingsChange:
     if not isinstance(old_hooks, dict):
         raise ValueError("The hooks setting must be a JSON object.")
     hooks = dict(old_hooks)
+    command, args = _hook_command(settings, folder) if install else ("", [])
     for event in EVENTS:
         groups = hooks.get(event, [])
         if not isinstance(groups, list):
@@ -109,14 +126,8 @@ def preview(settings: Path, folder: Path, install: bool) -> SettingsChange:
         if install:
             hook = {
                 "type": "command",
-                "command": str(Path(sys.executable).absolute()),
-                "args": [
-                    "-B",
-                    str(Path(__file__).with_name("hook.py").resolve()),
-                    MARKER,
-                    str(folder.resolve()),
-                    str((settings.parent / "projects").resolve()),
-                ],
+                "command": command,
+                "args": args,
                 "async": True,
                 "timeout": 2,
             }

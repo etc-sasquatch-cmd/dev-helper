@@ -65,9 +65,9 @@ def test_yaml_and_import_boundary(tmp_path):
         encoding="utf-8",
     )
     assert load_roadmap(tmp_path, "starter.yaml")[1].nodes[0].title == "HTTP"
-    with pytest.raises(ValueError, match="inside data/roadmaps"):
+    with pytest.raises(ValueError, match="inside the roadmap folder"):
         load_roadmap(tmp_path, "../outside.yaml")
-    with pytest.raises(ValueError, match="inside data/roadmaps"):
+    with pytest.raises(ValueError, match="inside the roadmap folder"):
         load_roadmap(tmp_path, str(path))
     path.write_text(path.read_text(encoding="utf-8").replace("https:", "javascript:"))
     with pytest.raises(ValueError, match="HTTP or HTTPS"):

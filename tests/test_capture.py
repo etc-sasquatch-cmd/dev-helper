@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 
@@ -62,6 +63,45 @@ def test_installer_handles_first_install_and_malformed_settings(capture):
     assert settings.exists()
     settings.write_text('{"hooks": {}, "hooks": {}}', encoding="utf-8")
     with pytest.raises(ValueError, match="duplicate"):
+        preview(settings, folder, install=True)
+
+
+def test_portable_hook_replaces_source_entry_and_preserves_unrelated_settings(capture, monkeypatch):
+    settings, projects, folder = capture
+    unrelated = {"hooks": [{"type": "command", "command": "other"}]}
+    settings.write_text(json.dumps({"hooks": {"Stop": [unrelated]}}), encoding="utf-8")
+    preview(settings, folder, install=True).apply()
+    source_settings = settings.read_bytes()
+
+    bundle = folder / "Moved bundle"
+    helper = bundle / "FocusDeckCapture" / "FocusDeckCapture.exe"
+    helper.parent.mkdir(parents=True)
+    helper.touch()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(bundle / "FocusDeck.exe"))
+
+    change = preview(settings, folder, install=True)
+    assert settings.read_bytes() == source_settings
+    assert change.apply().read_bytes() == source_settings
+    hooks = json.loads(settings.read_bytes())["hooks"]
+    assert hooks["Stop"][0] == unrelated
+    for event in EVENTS:
+        (owned,) = hooks[event][int(event == "Stop") :]
+        assert owned["hooks"] == [
+            {
+                "type": "command",
+                "command": str(helper),
+                "args": ["--focusdeck-capture-v1", str(folder), str(projects)],
+                "async": True,
+                "timeout": 2,
+            }
+        ]
+    assert not preview(settings, folder, install=True).has_changes
+    preview(settings, folder, install=False).apply()
+    assert json.loads(settings.read_bytes()) == {"hooks": {"Stop": [unrelated]}}
+
+    helper.unlink()
+    with pytest.raises(ValueError, match="portable capture helper is missing"):
         preview(settings, folder, install=True)
 
 

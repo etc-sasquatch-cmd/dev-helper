@@ -4,6 +4,7 @@ import argparse
 import platform
 import struct
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 def main() -> None:
@@ -26,23 +27,42 @@ def main() -> None:
 
     work = root / "build" / "portable"
     work.mkdir(parents=True, exist_ok=True)
-    run(
-        [
-            "--name=FocusDeck",
-            "--onedir",
-            "--windowed",
-            "--noupx",
-            f"--distpath={dist}",
-            f"--workpath={work}",
-            f"--specpath={work}",
-            f"--paths={root / 'src'}",
-            "--collect-data=nicegui",
-            "--copy-metadata=nicegui",
-            f"--add-data={root / 'src/focusdeck/db/migrations'}:focusdeck/db/migrations",
-            f"--add-data={root / 'src/focusdeck/music/youtube_player.js'}:focusdeck/music",
-            str(Path(__file__).with_name("launch.py")),
-        ]
-    )
+    common = [
+        "--onedir",
+        "--noupx",
+        f"--workpath={work}",
+        f"--specpath={work}",
+        f"--paths={root / 'src'}",
+    ]
+    dist.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".focusdeck-", dir=dist) as temporary:
+        staged = Path(temporary) / "FocusDeck"
+        run(
+            [
+                *common,
+                "--name=FocusDeck",
+                "--windowed",
+                f"--distpath={temporary}",
+                "--collect-data=nicegui",
+                "--copy-metadata=nicegui",
+                f"--add-data={root / 'src/focusdeck/db/migrations'}:focusdeck/db/migrations",
+                f"--add-data={root / 'src/focusdeck/music/youtube_player.js'}:focusdeck/music",
+                str(Path(__file__).with_name("launch.py")),
+            ]
+        )
+        # The console bootloader keeps redirected stdin available to the hook.
+        run(
+            [
+                *common,
+                "--name=FocusDeckCapture",
+                "--console",
+                "--hide-console=hide-early",
+                f"--distpath={staged}",
+                str(Path(__file__).with_name("capture.py")),
+            ]
+        )
+        staged.rename(dist / "FocusDeck")
+    print(f"Portable build ready in {dist / 'FocusDeck'}")
 
 
 if __name__ == "__main__":

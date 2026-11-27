@@ -106,7 +106,9 @@ Register `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`
 installer previews the exact change, requires confirmation, backs up the settings file when one
 exists, and offers uninstall.
 
-Hook command format: full path to `.venv\Scripts\python.exe` plus full path to the script.
+Source hooks use the full path to Python and the capture script. Portable hooks use the full
+path to the bundled `FocusDeckCapture.exe` helper. Both forms use the same event processing,
+preview, backup, and removal workflow.
 
 Each captured event adds one JSON line with its event and session IDs, event name, project path
 fingerprints, capture mode, and timestamp. Tool completion events can include a tool name and

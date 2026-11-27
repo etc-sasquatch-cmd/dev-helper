@@ -1,6 +1,7 @@
 """Reviewer preview, results, and local quiz controls."""
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def reviewer_dialog(
     result: ReviewRun | None = None
     on_classified = None
     busy = False
+    portable = getattr(sys, "frozen", False)
 
     with ui.dialog() as dialog, ui.card().classes("w-96 max-h-[85vh] overflow-y-auto gap-2"):
         ui.label("AI reviewers").classes("font-medium")
@@ -57,7 +59,12 @@ def reviewer_dialog(
                 "Quizzes are available for supported public subjects. Answers stay local."
             ).classes("text-xs")
             checkout = (
-                ui.input("Optional checkout path (relative)", placeholder=".")
+                ui.input(
+                    "Optional checkout path (absolute)"
+                    if portable
+                    else "Optional checkout path (relative)",
+                    placeholder=None if portable else ".",
+                )
                 .classes("w-full")
                 .props("dense")
             )

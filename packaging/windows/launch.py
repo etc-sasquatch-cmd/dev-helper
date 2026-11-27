@@ -36,6 +36,7 @@ def main() -> None:
     from focusdeck.db.connection import data_dir
 
     folder = data_dir()
+    (folder / "roadmaps").mkdir(exist_ok=True)
     os.environ.setdefault("NICEGUI_STORAGE_PATH", str(folder / "nicegui"))
     os.environ.setdefault("MPLCONFIGDIR", str(folder / "matplotlib"))
 
