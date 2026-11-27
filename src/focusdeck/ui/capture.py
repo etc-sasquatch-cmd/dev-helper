@@ -1,6 +1,7 @@
 """Capture setup for the native timer widget."""
 
 import os
+import sys
 from pathlib import Path
 
 from nicegui import ui
@@ -41,6 +42,11 @@ def capture_dialog(repo: Repo, folder: Path, settings: Path, on_dialog_toggled, 
             with ui.row().classes("w-full gap-1"):
                 install_button = ui.button("Install hooks").props("dense flat")
                 uninstall_button = ui.button("Uninstall hooks").props("dense flat")
+            if getattr(sys, "frozen", False):
+                install_button.disable()
+                ui.label("Use a source checkout to install capture hooks for now.").classes(
+                    "text-xs"
+                )
             ui.button("Close", on_click=dialog.close).props("dense flat")
 
         with ui.column().classes("w-full min-w-0 gap-2") as confirmation:

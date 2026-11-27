@@ -21,6 +21,7 @@ dev = [
     "pytest",
     "ruff",
 ]
+portable = ["PyInstaller==6.22.3; sys_platform == 'win32'"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,6 +1,26 @@
 # dev-helper
 FocusDeck is a Windows desktop widget for Pomodoro sessions, music, and study tracking.
 
+## Portable Windows build
+
+Build from the repository root with the project's x64 Windows Python environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[portable]"
+.\.venv\Scripts\python.exe packaging\windows\build.py
+```
+
+Keep the entire `dist/FocusDeck` folder together and launch `FocusDeck.exe` inside it.
+Use `--distpath` with another folder inside the checkout to keep a separate build.
+The bundle includes Python and app assets. It requires the Microsoft Edge WebView2
+Evergreen Runtime. Claude-based reviews require a separate native Claude CLI on `PATH`.
+The app keeps data in `%LOCALAPPDATA%\FocusDeck` unless `FOCUSDECK_DATA_DIR` is set.
+
+This build is portable. App installation and upgrades, bundled capture-hook setup, and
+installer-managed workspace paths are future work. Use the source checkout to install
+capture hooks. For roadmap imports and optional Work Critic checkout context, set the
+working directory as described below.
+
 ## Study tracking
 
 From the timer, add your skills with **+**, then open **Study**. Use **Targets** to
