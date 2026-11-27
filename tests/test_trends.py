@@ -4,11 +4,13 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from focusdeck.core.day import build_day
-from focusdeck.core.trends import build_trends
+from focusdeck.core.trends import build_trends, compare_trends
 from focusdeck.db.day import DayRepo
 from focusdeck.db.repo import to_db
 from focusdeck.db.study import StudyRepo
 from focusdeck.reports.charts import draw_trends_chart
+from focusdeck.reports.export import export_trends
+from focusdeck.reports.trends import NO_BASELINE, comparison_notes, comparison_rows
 from focusdeck.roadmaps.importer import RoadmapInput, Topic
 
 
@@ -105,3 +107,82 @@ def test_trends_respect_local_dst_days(repo, day, hours):
     trends = build_trends(DayRepo(repo), day, "Week", day, zone)
     assert trends.daily_seconds[day] == hours * 3600
     assert trends.seconds == hours * 3600
+
+
+def test_partial_month_comparison_caps_both_ranges_at_shorter_month(repo):
+    store = DayRepo(repo)
+    today = date(2026, 3, 31)
+    report = build_trends(store, today, "Month", today, UTC)
+    comparison = compare_trends(store, report, "Month", UTC)
+    assert len(report.daily_seconds) == 31
+    assert (comparison.current.start, comparison.current.end) == (
+        date(2026, 3, 1),
+        date(2026, 3, 28),
+    )
+    assert (comparison.previous.start, comparison.previous.end) == (
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+    )
+    assert NO_BASELINE in comparison_notes(comparison)
+    assert comparison_rows(comparison)[0] == ("Active minutes", "0.0", "—", "—")
+    monday = date(2026, 12, 28)
+    assert compare_trends(store, build_trends(store, monday, "Week", monday), "Week") is None
+
+
+def test_partial_week_comparison_uses_local_days_across_year_and_dst(repo):
+    store = DayRepo(repo)
+    for today in (date(2026, 1, 1), date(2026, 3, 10)):
+        zone = ZoneInfo("America/New_York")
+        report = build_trends(store, today, "Week", today, zone)
+        comparison = compare_trends(store, report, "Week", zone)
+        assert comparison.current.end == today - timedelta(days=1)
+        assert comparison.previous.start == comparison.current.start - timedelta(days=7)
+        assert list(comparison.previous.daily_seconds) == [
+            day - timedelta(days=7) for day in comparison.current.daily_seconds
+        ]
+
+
+def test_complete_month_comparison_and_exports_include_rates_and_keep_recaps_local(repo, tmp_path):
+    skill = repo.create_skill("Synthetic <skill>")
+    for month, minutes in ((12, 180), (1, 240), (2, 280)):
+        year = 2025 if month == 12 else 2026
+        start = datetime(year, month, 2, 8, tzinfo=UTC)
+        end = start + timedelta(minutes=minutes)
+        block = repo.insert_running_block(
+            phase="focus",
+            skill_id=skill,
+            work_type="Study",
+            planned_seconds=minutes * 60,
+            started_at=start,
+            ends_at=end,
+        )
+        repo.finish_block(block, status="completed", ended_at=end, elapsed_seconds=minutes * 60)
+        repo.save_recap(block, "PRIVATE RECAP TEXT")
+    store = DayRepo(repo)
+    today = date(2026, 3, 1)
+    january = build_trends(store, date(2026, 1, 20), "Month", today, UTC)
+    assert compare_trends(store, january, "Month", UTC).previous.start == date(2025, 12, 1)
+    report = build_trends(store, date(2026, 2, 8), "Month", today, UTC)
+    comparison = compare_trends(store, report, "Month", UTC)
+    assert comparison_rows(comparison)[:2] == [
+        ("Active minutes", "280.0", "240.0", "+40.0"),
+        ("Minutes per calendar day", "10.0", "7.7", "+2.3"),
+    ]
+    assert comparison_rows(comparison)[-1] == (
+        "Synthetic <skill> share",
+        "100.0%",
+        "100.0%",
+        "+0.0 pp",
+    )
+    png = draw_trends_chart(report)
+    markdown, html = export_trends(report, tmp_path, png, comparison, True)
+    assert "| Active minutes | 280.0 | 240.0 | +40.0 |" in markdown.read_text(encoding="utf-8")
+    assert (markdown.parent / "active-minutes.png").read_bytes() == png
+    html_text = html.read_text(encoding="utf-8")
+    assert "<td>Synthetic &lt;skill&gt; share</td>" in html_text
+    assert '<img alt="Active minutes by day" src="data:image/png;base64,' in html_text
+    for path in (markdown, html):
+        assert "PRIVATE RECAP TEXT" not in path.read_text(encoding="utf-8")
+    plain_md, plain_html = export_trends(report, tmp_path, png)
+    assert plain_md.parent != markdown.parent
+    assert "Period comparison" not in plain_html.read_text(encoding="utf-8")

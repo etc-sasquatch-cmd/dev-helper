@@ -181,6 +181,13 @@ by day. The summary shows work and skill totals, target versus actual allocation
 blocks, saved and skipped recaps, and topics first verified during the period. Trends use the Day
 report's overlap and classification rules and weight targets by the active time under each version.
 
+The optional previous-period comparison shows both date ranges, totals, and changes. For a current
+week or month, it compares the same number of completed local days on each side, capped at the
+shorter period. Completed months of different lengths also show active minutes per calendar day.
+Skill share changes are shown in percentage points when both ranges have at least 120 active
+minutes. **Save Trends** writes the displayed period and optional comparison to local Markdown and
+self-contained HTML. The export includes the daily chart and recap counts. Recap text stays in Day.
+
 ## 9. AI agents
 
 **Day → Review** offers Work Critic, Study Judge, Summarize, Classify, and Recall quiz.
@@ -311,5 +318,5 @@ The prototype was removed before commit. See the Spotify decision in section 4.
 - [x] Usage shown to the user when available
 
 ## 12. Later
-Installer, trend period comparisons and exports, optional YouTube account playlists, and hosting
-a public sample roadmap of the user's own authorship.
+Installer, optional YouTube account playlists, and hosting a public sample roadmap of the user's
+own authorship.
